@@ -53,6 +53,7 @@
         <table class="w-full text-left text-sm text-gray-600 border-collapse">
           <thead class="bg-gray-50 text-gray-500 font-bold border-b border-gray-100 uppercase tracking-tighter text-[10px]">
             <tr>
+              <th class="px-6 py-4">Image</th>
               <th class="px-6 py-4">Report ID</th>
               <th class="px-6 py-4">Issue Title</th>
               <th class="px-6 py-4">Category / Severity</th>
@@ -62,6 +63,11 @@
           </thead>
           <tbody class="divide-y divide-gray-100">
             <tr v-for="report in recentReports" :key="report.id" class="hover:bg-gray-50 transition-colors group">
+              <td class="px-6 py-4">
+                <div class="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden border border-gray-200 shadow-sm group-hover:scale-105 transition-transform">
+                   <img :src="getImageUrl(report.imagePath)" class="w-full h-full object-cover">
+                </div>
+              </td>
               <td class="px-6 py-4 font-mono text-[10px] text-gray-400 group-hover:text-gray-600 transition-colors uppercase">#{{ report.id.substring(0, 10) }}</td>
               <td class="px-6 py-4 font-bold text-gray-900 truncate max-w-[200px]">{{ report.title }}</td>
               <td class="px-6 py-4">
@@ -78,7 +84,7 @@
               </td>
             </tr>
             <tr v-if="reports.length === 0">
-               <td colspan="5" class="px-6 py-12 text-center text-gray-400 italic">No reports found. Start by capturing an issue!</td>
+               <td colspan="6" class="px-6 py-12 text-center text-gray-400 italic">No reports found. Start by capturing an issue!</td>
             </tr>
           </tbody>
         </table>
@@ -97,7 +103,12 @@ definePageMeta({
 
 const authStore = useAuthStore()
 const router = useRouter()
-const { data: reportsData } = await useAuthFetch('/issues/my-reports')
+const config = useRuntimeConfig()
+const { data: reportsData, error: fetchError } = await useAuthFetch('/issues/my-reports')
+
+if (fetchError.value) {
+    console.error('Failed to fetch reports:', fetchError.value)
+}
 
 const reports = computed(() => {
   if (!reportsData.value) return []
@@ -108,6 +119,12 @@ const totalReports = computed(() => reports.value.length)
 const pendingCount = computed(() => reports.value.filter((r: any) => r.status === 'PENDING').length)
 const resolvedCount = computed(() => reports.value.filter((r: any) => r.status === 'RESOLVED').length)
 const recentReports = computed(() => reports.value.slice(0, 5))
+
+const getImageUrl = (path: string) => {
+   if (!path) return ''
+   if (path.startsWith('http')) return path
+   return `${config.public.apiBase.replace('/api', '')}${path}`
+}
 
 const getStatusColor = (status: string) => {
   switch (status) {

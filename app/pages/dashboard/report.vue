@@ -135,7 +135,6 @@ const submitReport = async () => {
     formData.append('description', form.description)
     formData.append('latitude', location.value.lat.toString())
     formData.append('longitude', location.value.lng.toString())
-    formData.append('reportedBy', authStore.user?.email || 'anonymous') // Backend uses user ID logic now, this is fallback
 
     const { data, error } = await useFetch(`${config.public.apiBase}/issues/classify`, {
       method: 'POST',

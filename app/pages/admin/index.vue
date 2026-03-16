@@ -52,8 +52,7 @@
           </div>
        </div>
 
-       <!-- Hotspots Map -->
-       <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
+       <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col h-full">
           <div class="flex justify-between items-center mb-6">
             <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
               <Icon name="heroicons:fire" class="text-red-500" />
@@ -62,14 +61,8 @@
             <span class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full animate-pulse">Live</span>
           </div>
           
-          <div class="flex-1 bg-gray-100 rounded-xl relative overflow-hidden flex items-center justify-center min-h-[300px]">
-             <!-- Placeholder for Leaflet Map -->
-             <div class="text-center z-10">
-               <Icon name="heroicons:map" class="w-16 h-16 mx-auto mb-4 text-gray-400" />
-               <p class="text-gray-500 font-medium">Interactive Heatmap</p>
-               <p class="text-xs text-gray-400 mt-1">Found {{ hotspots.length }} high-density clusters</p>
-             </div>
-             <!-- In real app, mount Leaflet map here -->
+          <div class="flex-1 bg-gray-100 rounded-xl relative overflow-hidden flex items-center justify-center min-h-[350px]">
+             <HotspotMap :hotspots="hotspots" />
           </div>
        </div>
     </div>

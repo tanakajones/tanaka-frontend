@@ -224,23 +224,29 @@ const getDistance = (p1: {lat: number, lng: number}, p2: {lat: number, lng: numb
    return R * c;
 }
 
+const fetchOSRMRoute = async (coordinates: [number, number][]) => {
+   const coordsString = coordinates.map(c => `${c[1]},${c[0]}`).join(';')
+   const url = `https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson`
+   
+   try {
+      const response = await fetch(url)
+      const data = await response.json()
+      if (data.code === 'Ok') {
+         // OSRM returns [lng, lat], Leaflet wants [lat, lng]
+         return data.routes[0].geometry.coordinates.map((c: [number, number]) => [c[1], c[0]])
+      }
+   } catch (e) {
+      console.error('OSRM fetch failed', e)
+   }
+   return coordinates // Fallback to straight lines
+}
+
 const optimizeRoutes = async () => {
   optimizing.value = true
   polylines.value.forEach(p => p.remove())
   polylines.value = []
 
   try {
-     // Check if we can use real backend optimization
-     // const issueIds = pendingTasks.value.map(t => t.id)
-     // const { data } = await $fetch(`${config.public.apiBase}/tasks/optimize`, {
-     //    method: 'POST',
-     //    body: { issueIds }
-     // })
-     // If backend worked, we'd use data.assignments. 
-     // For now, keeping the robust Nearest Neighbor simulation as "frontend" optimization 
-     // since backend requires Python service which might be complex to debug if it fails.
-     // But I'll simulate it with the real data we fetched.
-
      await new Promise(r => setTimeout(r, 1500)) // Sim delay
      
      // Smarter Mock Optimization: Nearest Neighbor from HQ
@@ -287,20 +293,24 @@ const optimizeRoutes = async () => {
 
      optimizedData.value = { assignments }
 
-     // Draw Routes
-     Object.entries(assignments).forEach(([officer, tasks]: [string, any[]]) => {
-        const points = [[HQ_LOCATION.lat, HQ_LOCATION.lng]]
-        tasks.forEach(t => points.push([t.lat, t.lng]))
+     // Draw Routes with OSRM
+     for (const [officer, tasks] of Object.entries(assignments)) {
+        const coords: [number, number][] = [[HQ_LOCATION.lat, HQ_LOCATION.lng]]
+        tasks.forEach(t => coords.push([t.lat, t.lng]))
 
-        if (points.length > 1) {
+        if (coords.length > 1) {
            const color = getOfficerColor(officer)
-           // Use dashArray to visualize direction flow better if needed, but solid line is standard
-           const polyline = L.polyline(points, { color: color, weight: 5, opacity: 0.9 }).addTo(map.value!)
-           polylines.value.push(polyline)
+           const streetPoints = await fetchOSRMRoute(coords)
            
-           // Add arrows logic or similar if needed, but simple line suffices for routes
+           const polyline = L.polyline(streetPoints, { 
+              color: color, 
+              weight: 5, 
+              opacity: 0.9,
+              lineJoin: 'round'
+           }).addTo(map.value!)
+           polylines.value.push(polyline)
         }
-     })
+     }
      
      // Fit bounds
      if (polylines.value.length > 0) {

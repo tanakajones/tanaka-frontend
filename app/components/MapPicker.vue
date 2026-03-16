@@ -25,9 +25,9 @@ onMounted(async () => {
   // @ts-ignore
   delete L.Icon.Default.prototype._getIconUrl
   L.Icon.Default.mergeOptions({
-    iconRetinaUrl: '/marker-icon-2x.png',
-    iconUrl: '/marker-icon.png',
-    shadowUrl: '/marker-shadow.png',
+    iconRetinaUrl: '/images/marker-icon-2x.png',
+    iconUrl: '/images/marker-icon.png',
+    shadowUrl: '/images/marker-shadow.png',
   })
 
   // Center on Harare/Zimbabwe default or user location

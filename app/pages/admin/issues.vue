@@ -20,6 +20,7 @@
        <table class="w-full text-left border-collapse">
           <thead class="bg-gray-50 text-gray-600 font-bold text-sm">
               <tr>
+                 <th class="p-4 border-b">Image</th>
                  <th class="p-4 border-b">ID</th>
                  <th class="p-4 border-b">Title</th>
                  <th class="p-4 border-b">Category</th>
@@ -31,6 +32,11 @@
            </thead>
            <tbody class="divide-y divide-gray-100 text-sm">
               <tr v-for="issue in issues" :key="issue.id" class="hover:bg-gray-50 group transition-colors">
+                 <td class="p-4">
+                    <div class="w-10 h-10 rounded bg-gray-100 overflow-hidden border border-gray-200">
+                       <img :src="getImageUrl(issue.imagePath)" class="w-full h-full object-cover">
+                    </div>
+                 </td>
                  <td class="p-4 text-gray-400 font-mono">#{{ issue.id.substring(0, 6) }}</td>
                  <td class="p-4 font-medium text-gray-900">{{ issue.title }}</td>
                  <td class="p-4">
@@ -162,6 +168,12 @@ const officers = computed(() => {
 const newStatus = ref('')
 const assignedTo = ref('')
 const loading = ref(false)
+
+const getImageUrl = (path: string) => {
+   if (!path) return ''
+   if (path.startsWith('http')) return path
+   return `${config.public.apiBase.replace('/api', '')}${path}`
+}
 
 const openModal = (issue: any) => {
    selectedIssue.value = issue
