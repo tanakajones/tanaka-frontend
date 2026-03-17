@@ -34,14 +34,31 @@
              </div>
           </div>
           
-          <!-- Optimization Results Panel (appears below list when optimized) -->
-          <div v-if="optimizedData" class="border-t-2 border-purple-100 bg-purple-50 p-4 max-h-[40%] overflow-y-auto">
-             <h4 class="font-bold text-purple-800 mb-2 text-sm uppercase tracking-wide">Optimized Routes</h4>
-             <div v-for="(route, officerName) in optimizedData.assignments" :key="officerName" class="mb-3 last:mb-0">
-                <div class="flex items-center gap-2 mb-1">
-                   <div :style="{ backgroundColor: getOfficerColor(officerName) }" class="w-2 h-2 rounded-full"></div>
-                   <span class="font-bold text-xs text-gray-700">{{ officerName }}</span>
-                   <span class="text-xs text-gray-500">({{ route.length }} tasks)</span>
+          <!-- Optimization Results Panel -->
+          <div v-if="optimizedData" class="border-t-2 border-primary-100 bg-primary-50/50 p-4 max-h-[50%] overflow-y-auto">
+             <div class="flex justify-between items-center mb-4">
+               <h4 class="font-bold text-primary-800 text-sm uppercase tracking-wide">Optimization Results</h4>
+               <span class="text-xs font-mono text-gray-500">Tasks: {{ pendingTasks.length }}</span>
+             </div>
+             <div v-for="assignment in optimizedData.assignments" :key="assignment.officerId" class="mb-4 last:mb-0 p-3 bg-white rounded-lg border border-primary-100 shadow-sm">
+                <div class="flex justify-between items-center mb-2">
+                   <div class="flex items-center gap-2">
+                      <div :style="{ backgroundColor: getOfficerColor(assignment.officerId) }" class="w-3 h-3 rounded-full"></div>
+                      <span class="font-bold text-sm text-gray-800">{{ assignment.officerId }}</span>
+                   </div>
+                   <span class="text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full font-bold">
+                     {{ assignment.assignedIssues.length }} tasks
+                   </span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-xs text-gray-500 mt-2 border-t pt-2">
+                   <div class="flex items-center gap-1">
+                      <Icon name="heroicons:map-pin" class="w-3 h-3 text-gray-400" />
+                      {{ assignment.totalDistance.toFixed(1) }} km
+                   </div>
+                   <div class="flex items-center gap-1">
+                      <Icon name="heroicons:clock" class="w-3 h-3 text-gray-400" />
+                      {{ assignment.estimatedDuration }} min
+                   </div>
                 </div>
              </div>
           </div>
@@ -49,9 +66,11 @@
 
        <!-- Map Container -->
        <div class="lg:col-span-2 bg-gray-100 rounded-xl shadow-inner overflow-hidden relative border border-gray-200">
-          <div id="map" class="w-full h-full z-0"></div>
+          <ClientOnly>
+            <div id="map" class="w-full h-full z-0"></div>
+          </ClientOnly>
           
-          <!-- Map Overlay (Optimization Status) -->
+          <!-- Map Overlay -->
           <transition name="fade">
              <div v-if="optimizing" class="absolute inset-0 bg-white/60 backdrop-blur-sm z-[1000] flex flex-col items-center justify-center">
                 <Icon name="heroicons:cpu-chip" class="w-16 h-16 text-purple-600 animate-spin mb-4" />
@@ -65,8 +84,7 @@
 </template>
 
 <script setup lang="ts">
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
+let L: any = null
 
 definePageMeta({
   layout: 'admin',
@@ -107,8 +125,12 @@ const officerColors = {
 // HIT Coordinates
 const HQ_LOCATION = { lat: -17.8465, lng: 31.0069 }
 
-onMounted(() => {
-   initMap()
+onMounted(async () => {
+   if (process.client) {
+      L = await import('leaflet')
+      import('leaflet/dist/leaflet.css')
+      initMap()
+   }
 })
 
 const initMap = () => {
@@ -247,79 +269,52 @@ const optimizeRoutes = async () => {
   polylines.value = []
 
   try {
-     await new Promise(r => setTimeout(r, 1500)) // Sim delay
+     await new Promise(r => setTimeout(r, 800)) // Minimal UX delay
      
-     // Smarter Mock Optimization: Nearest Neighbor from HQ
-     const unassigned = [...pendingTasks.value]
-     const assignments: Record<string, any[]> = {
-         'John Doe': [],
-         'Jane Smith': [],
-         'Mike Johnson': []
-     }
-     
-     const officers = Object.keys(assignments)
-     let officerIndex = 0
+     const response = await useAuthFetch('/tasks/optimize', {
+        method: 'POST',
+        body: {
+           issueIds: pendingTasks.value.map(t => t.id)
+        }
+     })
 
-     // Distribute tasks greedily based on nearest to current location (start at HQ)
-     const officerLocations: Record<string, {lat: number, lng: number}> = {}
-     officers.forEach(o => officerLocations[o] = HQ_LOCATION)
-
-     while (unassigned.length > 0) {
-        const officer = officers[officerIndex]
-        const currentLoc = officerLocations[officer]
+     if (response.data.value) {
+        optimizedData.value = response.data.value
         
-        // Find nearest unassigned task
-        let nearestTaskIndex = -1
-        let minDist = Infinity
-
-        unassigned.forEach((task, idx) => {
-           const d = getDistance(currentLoc, task)
-           // Prioritize critical slightly
-           const weight = task.priority === 'CRITICAL' ? 0.5 : 1
-           if (d * weight < minDist) {
-              minDist = d * weight
-              nearestTaskIndex = idx
-           }
-        })
-
-        if (nearestTaskIndex !== -1) {
-           const task = unassigned.splice(nearestTaskIndex, 1)[0]
-           assignments[officer].push(task)
-           officerLocations[officer] = { lat: task.lat, lng: task.lng } // Move officer
-        }
-
-        officerIndex = (officerIndex + 1) % officers.length
-     }
-
-     optimizedData.value = { assignments }
-
-     // Draw Routes with OSRM
-     for (const [officer, tasks] of Object.entries(assignments)) {
-        const coords: [number, number][] = [[HQ_LOCATION.lat, HQ_LOCATION.lng]]
-        tasks.forEach(t => coords.push([t.lat, t.lng]))
-
-        if (coords.length > 1) {
-           const color = getOfficerColor(officer)
-           const streetPoints = await fetchOSRMRoute(coords)
+        // Map assignments to route drawing
+        for (const assignment of optimizedData.value.assignments) {
+           const officerId = assignment.officerId
+           const routePoints = assignment.optimizedRoute
            
-           const polyline = L.polyline(streetPoints, { 
-              color: color, 
-              weight: 5, 
-              opacity: 0.9,
-              lineJoin: 'round'
-           }).addTo(map.value!)
-           polylines.value.push(polyline)
+           if (routePoints && routePoints.length > 0) {
+              const coords: [number, number][] = [[HQ_LOCATION.lat, HQ_LOCATION.lng]]
+              routePoints.forEach((p: any) => coords.push([p.lat, p.lng]))
+
+              const color = getOfficerColor(officerId)
+              const streetPoints = await fetchOSRMRoute(coords)
+              
+              const polyline = L.polyline(streetPoints, { 
+                 color: color, 
+                 weight: 5, 
+                 opacity: 0.9,
+                 lineJoin: 'round'
+              }).addTo(map.value!)
+              polylines.value.push(polyline)
+           }
         }
-     }
-     
-     // Fit bounds
-     if (polylines.value.length > 0) {
-        const group = new L.FeatureGroup(polylines.value)
-        map.value?.fitBounds(group.getBounds().pad(0.1))
+        
+        // Fit bounds
+        if (polylines.value.length > 0) {
+           const group = new L.FeatureGroup(polylines.value)
+           map.value?.fitBounds(group.getBounds().pad(0.1))
+        }
+     } else {
+        throw new Error('No data returned from optimizer')
      }
 
-  } catch (e) {
-     alert('Optimization failed')
+  } catch (e: any) {
+     console.error('Optimization failed', e)
+     alert('Optimization failed: ' + (e.message || 'Check backend connection'))
   } finally {
      optimizing.value = false
   }

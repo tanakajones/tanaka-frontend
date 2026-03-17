@@ -8,62 +8,68 @@
          </div>
          <div>
             <p class="text-sm font-medium text-gray-500">{{ stat.label }}</p>
-            <p class="text-3xl font-bold text-gray-900 mt-1">{{ stat.value }}</p>
+            <p class="text-2xl font-bold text-gray-900 mt-1">{{ stat.value }}</p>
          </div>
          <div class="flex items-center gap-2 text-xs font-medium">
             <span :class="stat.trend > 0 ? 'text-green-600' : 'text-red-600'">
               {{ stat.trend > 0 ? '+' : ''}}{{ stat.trend }}%
             </span>
-            <span class="text-gray-400">vs last month</span>
+            <span class="text-gray-400">vs last period</span>
          </div>
       </div>
     </div>
 
-    <!-- AI Insights Section -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-       <!-- Infrastructure Health Prediction -->
-       <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-          <div class="flex justify-between items-center mb-6">
-            <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <Icon name="heroicons:chart-bar-square" class="text-primary-600" />
-              AI Failure Prediction
-            </h3>
-            <button class="text-sm text-primary-600 hover:text-primary-700 font-medium">View Details</button>
-          </div>
-          
-          <div v-if="predictions.length > 0" class="space-y-4">
-             <div v-for="pred in predictions.slice(0, 3)" :key="pred.ward" class="p-4 rounded-xl border border-gray-100 hover:border-primary-100 hover:bg-primary-50/30 transition-colors">
-                <div class="flex justify-between items-center mb-2">
-                   <h4 class="font-bold text-gray-800">{{ pred.ward }}</h4>
-                   <span :class="getRiskColor(pred.riskLevel)" class="px-2 py-1 rounded text-xs font-bold">{{ pred.riskLevel }} Risk</span>
-                </div>
-                <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
-                   <div class="bg-primary-600 h-2 rounded-full" :style="`width: ${pred.healthScore}%`"></div>
-                </div>
-                <div class="flex justify-between text-xs text-gray-500">
-                   <span>Health Score: {{ pred.healthScore }}/100</span>
-                   <span>Probable Fail: {{ pred.predictedFailureDate || 'N/A' }}</span>
+    <!-- AI Insights & Workforce Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+       <!-- Primary Feed (2/3) -->
+       <div class="lg:col-span-2 space-y-6">
+          <!-- AI Insights Section -->
+          <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 bg-gradient-to-br from-white to-primary-50/20">
+             <div class="flex justify-between items-center mb-6">
+               <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+                 <Icon name="heroicons:sparkles" class="text-primary-600" />
+                 AI Management Insights
+               </h3>
+               <span class="text-xs text-primary-600 font-bold uppercase tracking-wider">Live Analysis</span>
+             </div>
+             
+             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div v-for="insight in aiInsights" :key="insight.title" class="p-4 rounded-xl border border-primary-100 bg-white shadow-sm hover:shadow-md transition-shadow">
+                   <div class="flex items-center gap-2 mb-2">
+                      <Icon :name="insight.icon" class="w-5 h-5" :class="insight.color" />
+                      <h4 class="font-bold text-gray-800 text-sm">{{ insight.title }}</h4>
+                   </div>
+                   <p class="text-xs text-gray-600 leading-relaxed">{{ insight.description }}</p>
+                   <div v-if="insight.metric" class="mt-2 text-xs font-bold text-primary-700">
+                      {{ insight.metric }}
+                   </div>
                 </div>
              </div>
           </div>
-          <div v-else class="text-center py-8 text-gray-400">
-             <Icon name="heroicons:cpu-chip" class="w-12 h-12 mx-auto mb-2 opacity-50" />
-             <p>No predictions available. AI model training...</p>
+
+          <!-- Hotspot Detection -->
+          <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col h-full">
+            <div class="flex justify-between items-center mb-6">
+              <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <Icon name="heroicons:fire" class="text-red-500" />
+                Problem Hotspots & Real-time Heatmap
+              </h3>
+              <span class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full animate-pulse">Live</span>
+            </div>
+            
+            <div class="flex-1 bg-gray-100 rounded-xl relative overflow-hidden flex items-center justify-center min-h-[400px]">
+               <HotspotMap :hotspots="hotspots" />
+            </div>
           </div>
        </div>
 
-       <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col h-full">
-          <div class="flex justify-between items-center mb-6">
-            <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <Icon name="heroicons:fire" class="text-red-500" />
-              Hotspot Detection
-            </h3>
-            <span class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full animate-pulse">Live</span>
-          </div>
+       <!-- Side Panel (1/3) -->
+       <div class="space-y-6">
+          <!-- Workforce Summary -->
+          <WorkforceSummary :officers="officers" />
           
-          <div class="flex-1 bg-gray-100 rounded-xl relative overflow-hidden flex items-center justify-center min-h-[350px]">
-             <HotspotMap :hotspots="hotspots" />
-          </div>
+          <!-- Recent Tasks -->
+          <RecentTasks :issues="recentIssues" />
        </div>
     </div>
   </div>
@@ -77,18 +83,79 @@ definePageMeta({
 
 // Fetch Dashboard Data
 const { data: metrics } = await useAuthFetch('/dashboard/metrics')
-const { data: predictionsData } = await useAuthFetch('/predictions/failure-risk')
 const { data: hotspotsData } = await useAuthFetch('/hotspots')
+const { data: officersData } = await useAuthFetch('/officers')
+const { data: issuesData } = await useAuthFetch('/issues', { query: { size: 5, sort: 'reportedAt,desc' } })
 
 const stats = computed(() => [
-  { label: 'Total Reports', value: metrics.value?.totalReports || 120, trend: 12, icon: 'heroicons:document-text', textClass: 'text-primary-600' },
-  { label: 'Resolved', value: metrics.value?.resolvedCount || 85, trend: 8, icon: 'heroicons:check-circle', textClass: 'text-green-600' },
-  { label: 'Pending', value: metrics.value?.pendingCount || 35, trend: -5, icon: 'heroicons:clock', textClass: 'text-yellow-600' },
-  { label: 'Avg Resolution', value: `${metrics.value?.avgResolutionTime || 2.4} days`, trend: 0, icon: 'heroicons:bolt', textClass: 'text-blue-600' },
+  { label: 'Total Reports', value: metrics.value?.totalReports || 0, trend: 12, icon: 'heroicons:document-text', textClass: 'text-primary-600' },
+  { label: 'Pending Issues', value: metrics.value?.pendingCount || 0, trend: -5, icon: 'heroicons:clock', textClass: 'text-yellow-600' },
+  { label: 'Resolved', value: metrics.value?.resolvedCount || 0, trend: 8, icon: 'heroicons:check-circle', textClass: 'text-green-600' },
+  { label: 'Active Workforce', value: officersData.value?.filter((o:any) => o.availabilityStatus === 'AVAILABLE').length || 0, trend: 0, icon: 'heroicons:users', textClass: 'text-blue-600' },
 ])
 
-const predictions = computed(() => predictionsData.value?.predictions || [])
 const hotspots = computed(() => hotspotsData.value?.clusters || hotspotsData.value || [])
+const officers = computed(() => officersData.value || [])
+const recentIssues = computed(() => {
+  const content = issuesData.value?.content || issuesData.value || []
+  return Array.isArray(content) ? content.slice(0, 5) : []
+})
+
+// Generate AI Insights based on data
+const aiInsights = computed(() => {
+  const insights = []
+  
+  // Workforce capacity insight
+  const available = officers.value.filter((o:any) => o.availabilityStatus === 'AVAILABLE').length
+  const total = officers.value.length
+  if (total > 0) {
+    const capacity = Math.round((available / total) * 100)
+    insights.push({
+      title: 'Current Workforce Capacity',
+      description: available === 0 ? 'CRITICAL: No officers are currently available to handle pending tasks.' : `Your workforce is at ${capacity}% availability.`,
+      metric: `${available} of ${total} officers active`,
+      icon: 'heroicons:users',
+      color: available === 0 ? 'text-red-500' : 'text-blue-500'
+    })
+  }
+
+  // Task density insight
+  const pending = metrics.value?.pendingCount || 0
+  if (pending > 10) {
+    insights.push({
+      title: 'High Task Volume',
+      description: 'AI detects a surge in pending reports. Consider running route optimization to clear the backlog.',
+      metric: `${pending} issues awaiting action`,
+      icon: 'heroicons:bolt',
+      color: 'text-orange-500'
+    })
+  } else {
+    insights.push({
+      title: 'System Stability',
+      description: 'Incoming issue flow is manageable within current workforce constraints.',
+      metric: 'Flow: Normal',
+      icon: 'heroicons:check-badge',
+      color: 'text-green-500'
+    })
+  }
+
+  // Category insight
+  if (metrics.value?.issuesByCategory) {
+    const entries = Object.entries(metrics.value.issuesByCategory)
+    if (entries.length > 0) {
+      const topCategory = entries.reduce((a, b) => (b[1] as number) > (a[1] as number) ? b : a)
+      insights.push({
+        title: 'Primary Concern',
+        description: `Most reported issues currently fall under ${topCategory[0]}. Specialist allocation recommended.`,
+        metric: `Top: ${topCategory[0]}`,
+        icon: 'heroicons:light-bulb',
+        color: 'text-primary-500'
+      })
+    }
+  }
+
+  return insights.slice(0, 3)
+})
 
 const getRiskColor = (risk: string) => {
   switch (risk) {

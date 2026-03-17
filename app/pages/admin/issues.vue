@@ -39,9 +39,9 @@
                  </td>
                  <td class="p-4 text-gray-400 font-mono">#{{ issue.id.substring(0, 6) }}</td>
                  <td class="p-4 font-medium text-gray-900">{{ issue.title }}</td>
-                 <td class="p-4">
-                    <span class="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs border border-gray-200">{{ issue.category }}</span>
-                 </td>
+                  <td class="p-4">
+                     <span :class="getCategoryClass(issue.category)" class="px-2 py-1 rounded text-xs border">{{ formatCategory(issue.category) }}</span>
+                  </td>
                  <td class="p-4">
                     <span :class="getSeverityColor(issue.severity)" class="px-2 py-1 rounded-full text-xs font-bold border">{{ issue.severity }}</span>
                  </td>
@@ -82,7 +82,7 @@
            <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
               <!-- Image with AI Confidence -->
               <div class="relative w-full h-56 bg-gray-100 rounded-xl overflow-hidden mb-4 group">
-                 <img v-if="selectedIssue?.imagePath" :src="selectedIssue.imagePath.startsWith('http') ? selectedIssue.imagePath : `${config.public.apiBase.replace('/api', '')}${selectedIssue.imagePath}`" class="w-full h-full object-cover">
+                  <img v-if="selectedIssue?.imagePath" :src="getImageUrl(selectedIssue.imagePath)" class="w-full h-full object-cover">
                  <div v-else class="w-full h-full flex items-center justify-center text-gray-400">
                     <Icon name="heroicons:photo" class="w-12 h-12" />
                  </div>
@@ -96,7 +96,7 @@
               <div class="grid grid-cols-2 gap-4">
                  <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide">Category</label>
-                    <p class="font-bold text-gray-900">{{ selectedIssue?.category }}</p>
+                    <p class="font-bold text-gray-900">{{ formatCategory(selectedIssue?.category) }}</p>
                  </div>
                  <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide">Severity</label>
@@ -172,7 +172,9 @@ const loading = ref(false)
 const getImageUrl = (path: string) => {
    if (!path) return ''
    if (path.startsWith('http')) return path
-   return `${config.public.apiBase.replace('/api', '')}${path}`
+   const baseUrl = config.public.apiBase.replace('/api', '')
+   const cleanPath = path.startsWith('/') ? path : `/${path}`
+   return `${baseUrl}${cleanPath}`
 }
 
 const openModal = (issue: any) => {
@@ -218,6 +220,20 @@ const updateStatus = async () => {
    } finally {
       loading.value = false
    }
+}
+
+const formatCategory = (cat: string) => {
+   if (!cat) return 'Unknown'
+   return cat.replace(/_/g, ' ').split(' ')
+     .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+     .join(' ')
+}
+
+const getCategoryClass = (cat: string) => {
+   if (cat?.startsWith('WASTE_')) return 'bg-teal-50 text-teal-700 border-teal-200'
+   if (cat === 'ROAD_DAMAGE') return 'bg-orange-50 text-orange-700 border-orange-200'
+   if (cat === 'GOOD_ROAD') return 'bg-green-50 text-green-700 border-green-200'
+   return 'bg-gray-50 text-gray-600 border-gray-200'
 }
 
 const getSeverityColor = (sev: string) => {

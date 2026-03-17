@@ -15,7 +15,9 @@ const reports = computed(() => {
 const getImageUrl = (path: string) => {
    if (!path) return ''
    if (path.startsWith('http')) return path
-   return `${config.public.apiBase.replace('/api', '')}${path}`
+   const baseUrl = config.public.apiBase.replace('/api', '')
+   const cleanPath = path.startsWith('/') ? path : `/${path}`
+   return `${baseUrl}${cleanPath}`
 }
 
 const getStatusColor = (status: string) => {
