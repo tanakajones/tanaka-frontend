@@ -86,6 +86,8 @@ const handleLogin = async () => {
   if (success) {
     if (authStore.isAdmin) {
       router.push('/admin')
+    } else if (authStore.isOfficer) {
+      router.push('/officer')
     } else {
       router.push('/dashboard')
     }

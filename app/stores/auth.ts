@@ -25,7 +25,7 @@ export const useAuthStore = defineStore('auth', {
 
                 const response = data.value as any
                 this.token = response.access_token
-                this.user = { email: response.email, role: response.role }
+                this.user = { email: response.email, role: response.role, officerId: response.officerId }
 
                 // Save token to cookie and localStorage
                 const cookie = useCookie('auth_token')
@@ -64,6 +64,7 @@ export const useAuthStore = defineStore('auth', {
                 this.user = {
                     email: response.email,
                     role: response.role,
+                    officerId: response.officerId,
                     firstname: userData.firstname,
                     lastname: userData.lastname
                 }
@@ -114,6 +115,8 @@ export const useAuthStore = defineStore('auth', {
 
     getters: {
         isAuthenticated: (state) => !!state.token,
-        isAdmin: (state) => state.user?.role === 'ADMIN' || state.user?.role === 'OFFICER' // Assuming Officer has admin-like access for now
+        isAdmin: (state) => state.user?.role === 'ADMIN',
+        isOfficer: (state) => state.user?.role === 'OFFICER',
+        isUser: (state) => state.user?.role === 'USER'
     }
 })

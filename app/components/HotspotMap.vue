@@ -43,71 +43,78 @@ onMounted(async () => {
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map)
 
-  // Fetch and individual tasks heatmap
-  fetchHeatmapData(L)
+  // Layer groups for management
+  const hotspotLayerGroup = L.layerGroup().addTo(map!)
+  const markerLayerGroup = L.layerGroup().addTo(map!)
+
+  // Fetch hotspots from API directly
+  fetchHotspotHeatmap(L, hotspotLayerGroup)
 
   watch(() => props.hotspots, (newHotspots) => {
     if (!map || !newHotspots) return
     
-    // Clear existing markers
-    map.eachLayer((layer: any) => {
-      if (layer instanceof L.Marker || layer instanceof L.Circle) {
-        map?.removeLayer(layer)
-      }
-    })
+    // Clear marker layer only
+    markerLayerGroup.clearLayers()
 
     newHotspots.forEach((h: any) => {
-      const lat = h.center?.lat || h.location?.y || h.center?.y
-      const lng = h.center?.lng || h.location?.x || h.center?.x
+      const lat = h.center?.lat || h.location?.y || h.center?.y || h.lat
+      const lng = h.center?.lng || h.location?.x || h.center?.x || h.lng
       
       if (lat && lng) {
-        // Add Marker
+        // Add Marker to marker layer
         L.marker([lat, lng])
-          .addTo(map!)
+          .addTo(markerLayerGroup)
           .bindPopup(`
             <div class="p-2">
               <h3 class="font-bold text-lg border-b mb-2">${h.category || 'Cluster'}</h3>
               <p><b>Issues:</b> ${h.issueCount || 'N/A'}</p>
               <p><b>Severity:</b> <span class="text-orange-600 font-bold">${h.severityLevel || 'MEDIUM'}</span></p>
-              ${h.intensity ? `<p><b>Intensity:</b> ${h.intensity}</p>` : ''}
+              ${h.intensity ? `<p><b>Intensity:</b> ${h.intensity.toFixed(2)}</p>` : ''}
             </div>
           `)
 
-        // Add Intensity Circle if available
-        if (h.intensity) {
-          L.circle([lat, lng], {
-            radius: Math.min(h.intensity * 50, 1000),
-            color: 'red',
-            fillColor: '#f03',
-            fillOpacity: 0.3,
-            weight: 1
-          }).addTo(map!)
-        }
+        // Add Circle to marker layer for focus
+        L.circle([lat, lng], {
+          radius: 300,
+          color: '#3b82f6',
+          fillColor: '#3b82f6',
+          fillOpacity: 0.2,
+          weight: 1
+        }).addTo(markerLayerGroup)
       }
     })
   }, { immediate: true })
 })
 
-const fetchHeatmapData = async (L: any) => {
+const fetchHotspotHeatmap = async (L: any, layerGroup: any) => {
   try {
-     const data = await $fetch(`${config.public.apiBase}/dashboard/heatmap`, {
+     const data = await $fetch(`${config.public.apiBase}/dashboard/hotspots`, {
         headers: { Authorization: `Bearer ${authStore.token}` }
      })
      
      if (Array.isArray(data)) {
-        data.forEach((point: any) => {
-           // Plot individual task as a soft red circle (heatmap effect)
-           L.circle([point[0], point[1]], {
-              radius: 200,
-              color: 'transparent',
+        layerGroup.clearLayers() // Prevent ghosting
+        data.forEach((hotspot: any) => {
+           // Plot hotspot as a red circle with radius based on intensity/count
+           L.circle([hotspot.lat, hotspot.lng], {
+              radius: Math.max(hotspot.issueCount * 250, 500), // Radius grows with count, min 500m
+              color: '#ef4444',
               fillColor: '#ef4444',
-              fillOpacity: point[2] * 0.4,
-              interactive: false
-           }).addTo(map!)
+              fillOpacity: Math.min(hotspot.intensity * 0.15, 0.6), // Opacity grows with intensity
+              weight: 2
+           }).addTo(layerGroup)
+           .bindPopup(`
+              <div class="p-2">
+                 <h3 class="font-bold text-red-600 text-lg border-b mb-2">HOTSPOT: ${hotspot.category}</h3>
+                 <p><b>Issue Count:</b> ${hotspot.issueCount}</p>
+                 <p><b>Intensity Score:</b> ${hotspot.intensity.toFixed(2)}</p>
+                 <p class="text-xs text-gray-500 mt-2 italic">Urgent infrastructure focus area.</p>
+              </div>
+           `)
         })
      }
   } catch (e) {
-     console.error('Failed to fetch heatmap data', e)
+     console.error('Failed to fetch hotspot data', e)
   }
 }
 </script>

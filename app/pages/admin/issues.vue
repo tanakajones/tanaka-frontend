@@ -30,7 +30,7 @@
                  <th class="p-4 border-b text-right">Actions</th>
               </tr>
            </thead>
-           <tbody class="divide-y divide-gray-100 text-sm">
+           <tbody class="divide-y divide-gray-100 text-lg">
               <tr v-for="issue in issues" :key="issue.id" class="hover:bg-gray-50 group transition-colors">
                  <td class="p-4">
                     <div class="w-10 h-10 rounded bg-gray-100 overflow-hidden border border-gray-200">
@@ -39,24 +39,25 @@
                  </td>
                  <td class="p-4 text-gray-400 font-mono">#{{ issue.id.substring(0, 6) }}</td>
                  <td class="p-4 font-medium text-gray-900">{{ issue.title }}</td>
-                  <td class="p-4">
-                     <span :class="getCategoryClass(issue.category)" class="px-2 py-1 rounded text-xs border">{{ formatCategory(issue.category) }}</span>
+                  <td class="p-5">
+                     <span :class="getCategoryClass(issue.category)" class="px-3 py-1.5 rounded text-sm border font-bold">{{ formatCategory(issue.category) }}</span>
                   </td>
-                 <td class="p-4">
-                    <span :class="getSeverityColor(issue.severity)" class="px-2 py-1 rounded-full text-xs font-bold border">{{ issue.severity }}</span>
+                 <td class="p-5">
+                    <span :class="getSeverityColor(issue.severity)" class="px-3 py-1.5 rounded-full text-sm font-bold border">{{ issue.severity }}</span>
                  </td>
-                 <td class="p-4">
-                    <div v-if="issue.assignedOfficerId" class="flex items-center gap-2">
-                       <div class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold">
-                          {{ officers.find(o => o.id === issue.assignedOfficerId)?.name?.charAt(0) || 'O' }}
+                  <td class="p-4">
+                    <div v-if="issue.assignedOfficerIds && issue.assignedOfficerIds.length > 0" class="flex -space-x-2 overflow-hidden">
+                       <div v-for="oid in issue.assignedOfficerIds" :key="oid" 
+                          class="inline-block h-8 w-8 rounded-full ring-2 ring-white bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold"
+                          :title="officers.find(o => o.id === oid)?.name || 'Unknown Officer'">
+                          {{ officers.find(o => o.id === oid)?.name?.charAt(0) || 'O' }}
                        </div>
-                       <span class="text-gray-600">{{ officers.find(o => o.id === issue.assignedOfficerId)?.name || 'Unknown' }}</span>
                     </div>
                     <span v-else class="text-gray-400 italic">Unassigned</span>
                  </td>
-                 <td class="p-4">
-                    <span :class="getStatusColor(issue.status)" class="px-2 py-1 rounded-full text-xs font-bold flex items-center w-fit gap-1">
-                       <span class="w-1.5 h-1.5 rounded-full" :class="getStatusDot(issue.status)"></span>
+                 <td class="p-5">
+                    <span :class="getStatusColor(issue.status)" class="px-3 py-1.5 rounded-full text-sm font-bold flex items-center w-fit gap-2">
+                       <span class="w-2 h-2 rounded-full" :class="getStatusDot(issue.status)"></span>
                        {{ issue.status }}
                     </span>
                  </td>
@@ -122,15 +123,15 @@
                          <option value="REJECTED">REJECTED</option>
                       </select>
                   </div>
-                  <div>
-                      <label class="block text-sm font-bold text-gray-700 mb-2">Assign Officer</label>
-                      <select v-model="assignedTo" class="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all font-medium">
-                         <option value="">Unassigned</option>
-                         <option v-for="officer in officers" :key="officer.id" :value="officer.id">
-                            {{ officer.name }} ({{ officer.workload }} tasks)
-                         </option>
-                      </select>
-                  </div>
+                   <div class="col-span-2">
+                       <label class="block text-sm font-bold text-gray-700 mb-2">Assign Officers (Multiple allowed)</label>
+                       <div class="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-3 bg-gray-50 rounded-xl border border-gray-100">
+                          <label v-for="officer in officers" :key="officer.id" class="flex items-center gap-2 p-2 hover:bg-white rounded-lg transition-colors cursor-pointer border border-transparent hover:border-gray-200">
+                             <input type="checkbox" :value="officer.id" v-model="assignedToIds" class="rounded text-primary-600 focus:ring-primary-500">
+                             <span class="text-sm font-medium text-gray-700">{{ officer.name }}</span>
+                          </label>
+                       </div>
+                   </div>
               </div>
            </div>
            <div class="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
@@ -166,7 +167,7 @@ const officers = computed(() => {
 })
 
 const newStatus = ref('')
-const assignedTo = ref('')
+const assignedToIds = ref<string[]>([])
 const loading = ref(false)
 
 const getImageUrl = (path: string) => {
@@ -180,7 +181,7 @@ const getImageUrl = (path: string) => {
 const openModal = (issue: any) => {
    selectedIssue.value = issue
    newStatus.value = issue.status
-   assignedTo.value = issue.assignedOfficerId || ''
+   assignedToIds.value = issue.assignedOfficerIds || []
    showModal.value = true
 }
 
@@ -205,11 +206,14 @@ const updateStatus = async () => {
       }
 
       // Update Assignment
-      if (assignedTo.value !== (selectedIssue.value.assignedOfficerId || '')) {
+      const oldIds = selectedIssue.value.assignedOfficerIds || []
+      const hasChanged = JSON.stringify(oldIds.sort()) !== JSON.stringify(assignedToIds.value.sort())
+      
+      if (hasChanged) {
          await $fetch(`${config.public.apiBase}/issues/${selectedIssue.value.id}/assign`, {
             method: 'PUT',
             headers: { Authorization: `Bearer ${authStore.token}` },
-            params: { officerId: assignedTo.value }
+            params: { officerIds: assignedToIds.value.join(',') }
          })
       }
 

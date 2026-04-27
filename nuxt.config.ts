@@ -11,6 +11,10 @@ export default defineNuxtConfig({
     }
   },
   css: ['~/assets/css/main.css'],
+  devServer: {
+    host: '127.0.0.1',
+    port: 3000
+  },
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true }
 })
