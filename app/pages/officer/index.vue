@@ -133,10 +133,23 @@ onMounted(async () => {
 
 const fetchDashboardData = async () => {
   try {
-    const officerId = authStore.user?.officerId
+    let officerId = authStore.user?.officerId
+    
+    // If officerId is missing, try to find it by email
+    if (!officerId && authStore.user?.email) {
+      const officers = await $fetch(`${config.public.apiBase}/officers`, {
+        headers: { Authorization: `Bearer ${authStore.token}` }
+      })
+      const me = (officers as any[]).find(o => o.email === authStore.user.email)
+      if (me) {
+        officerId = me.id
+        authStore.user.officerId = me.id // Update store locally
+      }
+    }
+
     if (!officerId) return
 
-    const [active, completed] = await Promise.all([
+    const [tasksData, completedData] = await Promise.all([
       $fetch(`${config.public.apiBase}/tasks/officer/${officerId}`, {
         query: { type: 'active' },
         headers: { Authorization: `Bearer ${authStore.token}` }
@@ -147,14 +160,32 @@ const fetchDashboardData = async () => {
       })
     ])
 
-    activeJobs.value = (active as any[]) || []
-    completedCount.value = (completed as any[]).length
+    const tasks = (tasksData as any[]) || []
+    completedCount.value = (completedData as any[]).length
     
-    // Calculate overdue (mock logic if not from API)
-    overdueCount.value = activeJobs.value.filter(j => new Date(j.deadline) < new Date()).length
-    
-    if (activeJobs.value.length > 0) {
-      plotMarkers()
+    if (tasks.length > 0) {
+      // Enrich with issue data
+      const enriched = await Promise.all(tasks.map(async (task: any) => {
+        try {
+          const issue = await $fetch(`${config.public.apiBase}/issues/${task.issueId}`, {
+            headers: { Authorization: `Bearer ${authStore.token}` }
+          })
+          return { ...task, ...issue, taskId: task.id }
+        } catch (e) {
+          return task
+        }
+      }))
+      
+      // Sort by routeOrder
+      activeJobs.value = enriched.sort((a, b) => (a.routeOrder || 0) - (b.routeOrder || 0))
+      
+      // Calculate overdue
+      overdueCount.value = activeJobs.value.filter(j => j.deadline && new Date(j.deadline) < new Date()).length
+      
+      // Draw route on map
+      drawRoute()
+    } else {
+      activeJobs.value = []
     }
   } catch (e) {
     console.error('Failed to fetch dashboard data', e)
@@ -165,33 +196,98 @@ const initMap = () => {
   setTimeout(() => {
     if (!document.getElementById('overview-map')) return
     
-    map = L.map('overview-map').setView([-17.82, 31.05], 11)
+    // Fix icons
+    delete L.Icon.Default.prototype._getIconUrl
+    L.Icon.Default.mergeOptions({
+       iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+       iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+       shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+    })
+
+    map = L.map('overview-map', { zoomControl: false }).setView([-17.8465, 31.0069], 12)
+    L.control.zoom({ position: 'bottomright' }).addTo(map)
+    
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap'
     }).addTo(map)
     
-    plotMarkers()
+    // Add HQ Marker
+    const homeIcon = L.divIcon({
+        className: 'custom-div-icon',
+        html: "<div style='background-color:#059669; width: 1.5rem; height: 1.5rem; border-radius: 50%; border: 3px solid white; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; color: white; font-weight: 900; font-size: 8px;'>HQ</div>",
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+
+    L.marker([HQ_LOCATION.lat, HQ_LOCATION.lng], { icon: homeIcon }).addTo(map)
+    
+    if (activeJobs.value.length > 0) {
+      drawRoute()
+    }
   }, 500)
 }
 
-const plotMarkers = () => {
+const fetchOSRMRoute = async (coordinates: [number, number][]) => {
+   if (!coordinates || coordinates.length < 2) return coordinates;
+   const coordsString = coordinates.map(c => `${c[1]},${c[0]}`).join(';')
+   const url = `https://routing.openstreetmap.de/routed-car/route/v1/driving/${coordsString}?overview=full&geometries=geojson`
+   
+   try {
+      const response = await fetch(url)
+      const data = await response.json()
+      if (data.code === 'Ok' && data.routes?.[0]) {
+         return data.routes[0].geometry.coordinates.map((c: any) => [c[1], c[0]])
+      }
+   } catch (e) {}
+   return coordinates
+}
+
+const drawRoute = async () => {
   if (!map || !L || !activeJobs.value.length) return
+  
+  // Clear previous markers/lines if any
+  map.eachLayer((layer: any) => {
+    if (layer instanceof L.Marker && layer.getPopup()?.getContent()?.includes('HQ') === false) {
+      map.removeLayer(layer)
+    }
+    if (layer instanceof L.Polyline) {
+      map.removeLayer(layer)
+    }
+  })
+
+  const coords: [number, number][] = [[HQ_LOCATION.lat, HQ_LOCATION.lng]]
   
   activeJobs.value.forEach(job => {
     if (job.location) {
-      L.marker([job.location.y, job.location.x])
-        .bindPopup(`<b>\${job.description}</b>`)
+      const lat = job.location.y
+      const lng = job.location.x
+      coords.push([lat, lng])
+      
+      L.marker([lat, lng])
+        .bindPopup(`<b>${job.title || job.description}</b><br>Priority: ${job.priority}`)
         .addTo(map)
     }
   })
+  
+  coords.push([HQ_LOCATION.lat, HQ_LOCATION.lng]) // Return trip
+
+  const streetPoints = await fetchOSRMRoute(coords)
+  const polyline = L.polyline(streetPoints, { 
+    color: '#10b981', 
+    weight: 5, 
+    opacity: 0.7,
+    lineJoin: 'round'
+  }).addTo(map)
+  
+  map.fitBounds(polyline.getBounds().pad(0.2))
 }
 
 const getPriorityClass = (priority: string) => {
   switch(priority) {
-    case 'CRITICAL': return 'bg-red-100 text-red-700 border border-red-200'
-    case 'HIGH': return 'bg-orange-100 text-orange-700 border border-orange-200'
-    case 'MEDIUM': return 'bg-blue-100 text-blue-700 border border-blue-200'
-    default: return 'bg-gray-100 text-gray-700 border border-gray-200'
+    case 'CRITICAL': return 'bg-red-50 text-red-700 border-red-200'
+    case 'HIGH': return 'bg-orange-50 text-orange-700 border-orange-200'
+    case 'MEDIUM': return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    default: return 'bg-gray-50 text-gray-700 border-gray-200'
   }
 }
 

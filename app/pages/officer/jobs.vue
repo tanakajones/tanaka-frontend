@@ -190,14 +190,46 @@ onMounted(() => {
 const fetchJobs = async () => {
   loading.value = true
   try {
-    const officerId = authStore.user?.officerId
+    let officerId = authStore.user?.officerId
+
+    // If officerId is missing, try to find it by email
+    if (!officerId && authStore.user?.email) {
+      const officers = await $fetch(`${config.public.apiBase}/officers`, {
+        headers: { Authorization: `Bearer ${authStore.token}` }
+      })
+      const me = (officers as any[]).find(o => o.email === authStore.user.email)
+      if (me) {
+        officerId = me.id
+        authStore.user.officerId = me.id // Update store locally
+      }
+    }
+
     if (!officerId) return
 
-    const data = await $fetch(`\${config.public.apiBase}/tasks/officer/\${officerId}`, {
+    const data = await $fetch(`${config.public.apiBase}/tasks/officer/${officerId}`, {
       query: { type: 'active' },
-      headers: { Authorization: `Bearer \${authStore.token}` }
+      headers: { Authorization: `Bearer ${authStore.token}` }
     })
-    jobs.value = (data as any[]) || []
+    
+    const tasks = (data as any[]) || []
+    
+    if (tasks.length > 0) {
+      // Enrich with issue data
+      const enriched = await Promise.all(tasks.map(async (task: any) => {
+        try {
+          const issue = await $fetch(`${config.public.apiBase}/issues/${task.issueId}`, {
+            headers: { Authorization: `Bearer ${authStore.token}` }
+          })
+          return { ...task, ...issue, taskId: task.id }
+        } catch (e) {
+          return task
+        }
+      }))
+      
+      jobs.value = enriched.sort((a, b) => (a.routeOrder || 0) - (b.routeOrder || 0))
+    } else {
+      jobs.value = []
+    }
     
     // Auto-select first job if none selected
     if (jobs.value.length > 0 && !selectedJob.value) {
