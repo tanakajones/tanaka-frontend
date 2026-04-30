@@ -47,6 +47,14 @@
           <Icon name="heroicons:clipboard-document-list" class="w-5 h-5 mr-3 group-hover:text-white transition-colors" />
           Task Management
         </NuxtLink>
+
+        <!-- Reports -->
+        <NuxtLink to="/admin/reports" 
+          class="flex items-center px-4 py-3 text-gray-300 rounded-lg hover:bg-gray-800 hover:text-white transition-colors group"
+          active-class="bg-primary-600 text-white shadow-lg shadow-primary-500/30">
+          <Icon name="heroicons:presentation-chart-line" class="w-5 h-5 mr-3 group-hover:text-white transition-colors" />
+          System Reports
+        </NuxtLink>
       </nav>
 
       <!-- Logout (Bottom) -->

@@ -1,110 +1,112 @@
 <template>
-  <div class="space-y-8">
-    <!-- Header -->
-    <div class="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+  <div class="space-y-6 pb-12">
+    <!-- Simplified Header -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
       <div>
-        <h2 class="text-3xl font-bold text-gray-900">Data-Driven Analytics Report</h2>
-        <p class="text-gray-500 mt-1">Comprehensive summary of city infrastructure issues and remediation status.</p>
+        <h2 class="text-2xl font-bold text-gray-900">Infrastructure Statistics</h2>
+        <p class="text-gray-500 text-sm">Summary of categories with active reports.</p>
       </div>
-      <div class="flex gap-4">
-        <button @click="downloadCSV" class="flex items-center gap-2 px-6 py-3 bg-white border-2 border-primary-600 text-primary-600 rounded-xl font-bold hover:bg-primary-50 transition-all shadow-sm">
+      <div class="flex items-center gap-3 w-full md:w-auto">
+        <div class="relative flex-1 md:w-64">
+          <Icon name="heroicons:funnel" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <select v-model="selectedCategory" class="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary-500 outline-none appearance-none">
+            <option value="all">All Active Categories</option>
+            <option v-for="(count, cat) in activeCategories" :key="cat" :value="cat">
+              {{ cat.replace('_', ' ') }} ({{ count }})
+            </option>
+          </select>
+        </div>
+        <button @click="downloadCSV" class="p-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-all shadow-sm" title="Export CSV">
           <Icon name="heroicons:table-cells" class="w-5 h-5" />
-          Download CSV
-        </button>
-        <button class="flex items-center gap-2 px-6 py-3 bg-primary-600 text-white rounded-xl font-bold hover:bg-primary-700 transition-all shadow-lg shadow-primary-500/30">
-          <Icon name="heroicons:document-arrow-down" class="w-5 h-5" />
-          Generate PDF Report
         </button>
       </div>
     </div>
 
-    <!-- Stats Overview -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-      <div v-for="(val, label) in reports?.byStatus" :key="label" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 group hover:border-primary-200 transition-all">
-        <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">{{ label.replace('_', ' ') }}</p>
-        <p class="text-4xl font-black text-gray-900 mt-2">{{ val }}</p>
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Total Active Issues</p>
+        <p class="text-4xl font-black text-gray-900 mt-2">{{ totalIssues }}</p>
+      </div>
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Resolution Rate</p>
+        <p class="text-4xl font-black text-primary-600 mt-2">{{ reports?.resolutionRate?.toFixed(1) || 0 }}%</p>
+      </div>
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Avg Response</p>
+        <div class="flex items-baseline gap-1 mt-2">
+          <p class="text-4xl font-black text-orange-500">{{ reports?.avgResponseTime?.toFixed(1) || 0 }}</p>
+          <p class="text-sm font-bold text-gray-400">hrs</p>
+        </div>
       </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      <!-- Pie Chart: Categories -->
-      <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 h-[500px]">
-        <h3 class="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-           <Icon name="heroicons:chart-pie" class="w-6 h-6 text-primary-500" />
-           Issue Distribution by Category
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Category Volume List -->
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <h3 class="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
+          <Icon name="heroicons:chart-bar" class="w-5 h-5 text-primary-500" />
+          Active Category Breakdown
         </h3>
-        <div class="relative h-[350px] flex items-center justify-center">
-            <!-- Simple custom pie-like visual if chart.js is still installing -->
-            <div class="flex flex-col gap-4 w-full">
-               <div v-for="(count, cat) in sortedCategories" :key="cat" class="space-y-2">
-                  <div class="flex justify-between text-sm font-bold">
-                     <span class="text-gray-700">{{ cat.replace('_', ' ') }}</span>
-                     <span class="text-gray-400">{{ count }} issues ({{ ((count / totalIssues) * 100).toFixed(1) }}%)</span>
-                  </div>
-                  <div class="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
-                     <div class="bg-primary-500 h-full rounded-full transition-all duration-1000" :style="{ width: (count / totalIssues * 100) + '%' }"></div>
-                  </div>
-               </div>
+        <div class="space-y-4">
+          <div v-for="(count, cat) in filteredCategories" :key="cat" class="group">
+            <div class="flex justify-between text-sm mb-1">
+              <span class="font-bold text-gray-700">{{ cat.replace('_', ' ') }}</span>
+              <span class="font-bold text-gray-900">{{ count }} reports</span>
             </div>
+            <div class="w-full bg-gray-50 rounded-full h-2 overflow-hidden">
+              <div 
+                class="bg-primary-500 h-full rounded-full transition-all duration-700" 
+                :style="{ width: (count / totalIssues * 100) + '%' }"
+              ></div>
+            </div>
+          </div>
+          <div v-if="Object.keys(filteredCategories).length === 0" class="py-12 text-center text-gray-400 font-medium">
+             No active issues found for this selection.
+          </div>
         </div>
       </div>
 
-      <!-- Bar Chart: Location/Ward -->
-      <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 h-[500px]">
-        <h3 class="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-           <Icon name="heroicons:map-pin" class="w-6 h-6 text-orange-500" />
-           Report Frequency by Ward (Location)
+      <!-- Ward Impact -->
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        <h3 class="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
+          <Icon name="heroicons:map-pin" class="w-5 h-5 text-orange-500" />
+          Impacted Areas
         </h3>
-        <div class="flex items-end justify-between h-[350px] pt-10 gap-4">
-           <div v-for="(count, ward) in reports?.byWard" :key="ward" class="flex-1 flex flex-col items-center gap-2">
-              <div class="w-full bg-orange-100 rounded-t-lg relative group transition-all" :style="{ height: (count / maxWardCount * 100) + '%' }">
-                 <div class="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity font-bold">
-                    {{ count }}
-                 </div>
-                 <div class="w-full h-full bg-orange-500 rounded-t-lg scale-y-0 group-hover:scale-y-100 transition-transform origin-bottom"></div>
-              </div>
-              <span class="text-[10px] font-bold text-gray-400 rotate-45 mt-4">{{ ward }}</span>
-           </div>
+        <div class="flex items-end justify-between h-48 gap-2 px-4">
+          <div v-for="(count, ward) in reports?.byWard" :key="ward" class="flex-1 flex flex-col items-center group">
+            <div class="w-full bg-orange-100 rounded-t-lg relative transition-all" :style="{ height: (count / maxWardCount * 100) + '%' }">
+              <div class="w-full h-full bg-orange-500 rounded-t-lg opacity-80 group-hover:opacity-100 transition-opacity"></div>
+            </div>
+            <span class="text-[10px] font-bold text-gray-400 mt-2 rotate-45 truncate w-8">{{ ward }}</span>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Report Table -->
+    <!-- Simple Data Table -->
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div class="p-6 border-b border-gray-100 flex justify-between items-center">
-          <h3 class="text-xl font-bold text-gray-900">Infrastructure Health Summary</h3>
-          <span class="text-sm font-bold text-gray-400 uppercase">Last updated: Just now</span>
-      </div>
       <table class="w-full text-left">
-        <thead class="bg-gray-50 text-gray-600 text-sm font-bold">
+        <thead class="bg-gray-50 text-gray-400 text-[10px] font-black uppercase tracking-widest">
           <tr>
-            <th class="p-5 border-b">Category</th>
-            <th class="p-5 border-b">Density Score</th>
-            <th class="p-5 border-b">Total Reports</th>
-            <th class="p-5 border-b">Resolution Status</th>
+            <th class="px-6 py-4">Category</th>
+            <th class="px-6 py-4">Total Reports</th>
+            <th class="px-6 py-4">Status</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-50 text-base font-medium">
-          <tr v-for="(count, cat) in reports?.byCategory" :key="cat" class="hover:bg-gray-50 transition-colors">
-            <td class="p-5">
-               <span class="px-3 py-1 bg-primary-50 text-primary-700 rounded-lg text-sm font-bold border border-primary-100">
-                  {{ cat.replace('_', ' ') }}
-               </span>
+        <tbody class="divide-y divide-gray-50 text-sm font-bold">
+          <tr v-for="(count, cat) in filteredCategories" :key="cat" class="hover:bg-gray-50/50 transition-all">
+            <td class="px-6 py-4">
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full" :class="getDotColor(cat)"></span>
+                {{ cat.replace('_', ' ') }}
+              </div>
             </td>
-            <td class="p-5">
-               <div class="flex items-center gap-2">
-                  <div class="flex-1 bg-gray-100 h-2 rounded-full overflow-hidden w-24">
-                     <div class="bg-red-500 h-full" :style="{ width: (Math.min(count * 5, 100)) + '%' }"></div>
-                  </div>
-                  <span class="text-xs font-bold text-gray-400 text-right">{{ Math.min(count * 5, 100) }}%</span>
-               </div>
-            </td>
-            <td class="p-5 text-gray-900 font-bold">{{ count }}</td>
-            <td class="p-5">
-               <span class="flex items-center gap-2 text-green-600 font-bold text-sm">
-                  <Icon name="heroicons:shield-check" class="w-5 h-5" />
-                  Healthy
-               </span>
+            <td class="px-6 py-4 text-gray-900">{{ count }}</td>
+            <td class="px-6 py-4">
+              <span class="text-[10px] px-2 py-1 bg-gray-100 rounded text-gray-500 uppercase tracking-widest">
+                {{ count > 5 ? 'High Volume' : 'Stable' }}
+              </span>
             </td>
           </tr>
         </tbody>
@@ -120,28 +122,45 @@ definePageMeta({
 })
 
 const config = useRuntimeConfig()
-const authStore = useAuthStore()
 const { data: reports } = await useAuthFetch('/reports/summary')
 
-const totalIssues = computed(() => {
-   if (!reports.value?.byCategory) return 0
-   return Object.values(reports.value.byCategory).reduce((a: any, b: any) => a + b, 0)
+const selectedCategory = ref('all')
+
+// Only show categories that have at least one report
+const activeCategories = computed(() => {
+  if (!reports.value?.byCategory) return {}
+  return Object.fromEntries(
+    Object.entries(reports.value.byCategory)
+      .filter(([, count]: any) => count > 0)
+      .sort(([, a]: any, [, b]: any) => b - a)
+  )
 })
 
-const sortedCategories = computed(() => {
-   if (!reports.value?.byCategory) return {}
-   return Object.fromEntries(
-     Object.entries(reports.value.byCategory).sort(([,a]: any, [,b]: any) => b - a)
-   )
+const filteredCategories = computed(() => {
+  if (selectedCategory.value === 'all') return activeCategories.value
+  return { [selectedCategory.value]: activeCategories.value[selectedCategory.value] }
+})
+
+const totalIssues = computed(() => {
+  return Object.values(activeCategories.value).reduce((a: any, b: any) => a + b, 0)
 })
 
 const maxWardCount = computed(() => {
-   if (!reports.value?.byWard) return 1
-   return Math.max(...Object.values(reports.value.byWard).map((v: any) => v))
+  if (!reports.value?.byWard) return 1
+  const values: any = Object.values(reports.value.byWard)
+  return values.length > 0 ? Math.max(...values) : 1
 })
 
 const downloadCSV = () => {
-   const url = `${config.public.apiBase}/reports/export/csv`
-   window.open(url, '_blank')
+  const url = `${config.public.apiBase}/reports/export/csv`
+  window.open(url, '_blank')
+}
+
+const getDotColor = (cat: string) => {
+  const c = cat.toUpperCase()
+  if (c.includes('ROAD')) return 'bg-blue-500'
+  if (c.includes('WASTE')) return 'bg-green-500'
+  if (c.includes('DRAIN')) return 'bg-orange-500'
+  return 'bg-purple-500'
 }
 </script>
