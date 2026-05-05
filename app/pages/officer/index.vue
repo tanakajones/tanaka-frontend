@@ -56,23 +56,60 @@
           </h3>
           <NuxtLink to="/officer/jobs" class="text-sm font-bold text-primary-600 hover:text-primary-700">View All</NuxtLink>
         </div>
-        <div class="divide-y divide-gray-50">
-          <div v-for="job in activeJobs.slice(0, 5)" :key="job.id" class="p-6 hover:bg-gray-50 transition-colors group">
+        <div class="divide-y divide-gray-50 max-h-[600px] overflow-y-auto">
+          <div v-for="job in activeJobs" :key="job.id" class="p-6 hover:bg-gray-50 transition-colors group">
             <div class="flex justify-between items-start mb-2">
-              <h4 class="font-bold text-gray-900 group-hover:text-primary-600 transition-colors">{{ job.description }}</h4>
-              <span :class="getPriorityClass(job.priority)" class="text-[10px] font-black uppercase px-2 py-1 rounded-lg">
-                {{ job.priority }}
+              <div>
+                 <h4 class="font-bold text-gray-900 group-hover:text-primary-600 transition-colors">{{ job.title || job.description }}</h4>
+                 <p class="text-[10px] text-gray-400 font-medium">Task ID: {{ job.taskId }}</p>
+              </div>
+              <span :class="getPriorityClass(job.severity || job.priority)" class="text-[10px] font-black uppercase px-2 py-1 rounded-lg">
+                {{ job.severity || job.priority }}
               </span>
             </div>
-            <div class="flex items-center text-xs text-gray-500 gap-4">
+            
+            <div class="flex items-center text-xs text-gray-500 gap-4 mb-4">
               <span class="flex items-center gap-1">
                 <Icon name="heroicons:map-pin" class="w-4 h-4 text-gray-400" />
-                {{ job.ward }}
+                {{ job.wardId || job.ward || 'N/A' }}
               </span>
               <span class="flex items-center gap-1">
-                <Icon name="heroicons:calendar" class="w-4 h-4 text-gray-400" />
-                Due: {{ formatDate(job.deadline) }}
+                <Icon name="heroicons:tag" class="w-4 h-4 text-gray-400" />
+                {{ job.category }}
               </span>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex flex-col gap-3">
+               <div class="flex items-center gap-2">
+                  <button 
+                    @click="updateJobStatus(job, 'IN_PROGRESS')" 
+                    v-if="job.status === 'PENDING'"
+                    class="flex-1 py-2 bg-primary-600 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider hover:bg-primary-700 transition-all shadow-sm">
+                    Start Job
+                  </button>
+                  <button 
+                    @click="updateJobStatus(job, 'RESOLVED')" 
+                    class="flex-1 py-2 bg-emerald-600 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider hover:bg-emerald-700 transition-all shadow-sm">
+                    Complete Job
+                  </button>
+               </div>
+               
+               <div class="relative group/comment">
+                  <input 
+                    v-model="job.newComment"
+                    @keyup.enter="addComment(job)"
+                    placeholder="Add a progress update..." 
+                    class="w-full pl-3 pr-10 py-2 bg-gray-50 border border-gray-100 rounded-xl text-xs focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all">
+                  <button @click="addComment(job)" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-primary-600">
+                     <Icon name="heroicons:paper-airplane" class="w-4 h-4" />
+                  </button>
+               </div>
+               
+               <div v-if="job.notes" class="p-3 bg-blue-50/50 rounded-xl border border-blue-100/50">
+                  <p class="text-[10px] font-bold text-blue-600 uppercase mb-1">Latest Update</p>
+                  <p class="text-[11px] text-gray-600 italic">"{{ job.notes }}"</p>
+               </div>
             </div>
           </div>
           <div v-if="!activeJobs.length" class="p-12 text-center">
@@ -240,6 +277,35 @@ const fetchOSRMRoute = async (coordinates: [number, number][]) => {
       }
    } catch (e) {}
    return coordinates
+}
+
+const updateJobStatus = async (job: any, status: string) => {
+   try {
+      await $fetch(`${config.public.apiBase}/tasks/${job.taskId}/status`, {
+         method: 'PUT',
+         headers: { Authorization: `Bearer ${authStore.token}` },
+         body: { status }
+      })
+      await fetchDashboardData()
+   } catch (e) {
+      console.error('Failed to update status', e)
+   }
+}
+
+const addComment = async (job: any) => {
+   if (!job.newComment?.trim()) return
+   try {
+      await $fetch(`${config.public.apiBase}/tasks/${job.taskId}/notes`, {
+         method: 'PUT',
+         headers: { Authorization: `Bearer ${authStore.token}` },
+         body: { notes: job.newComment }
+      })
+      job.notes = job.newComment
+      job.newComment = ''
+      // await fetchDashboardData()
+   } catch (e) {
+      console.error('Failed to add comment', e)
+   }
 }
 
 const drawRoute = async () => {

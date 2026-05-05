@@ -7,6 +7,10 @@
           <p class="text-xs text-gray-500 font-medium">Auto-allocate tasks based on proximity, skills, and priority</p>
        </div>
        <div class="flex gap-3">
+          <button @click="resetAllocations" :disabled="loading || resetting" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 font-bold text-xs flex items-center transition-all disabled:opacity-50">
+             <Icon name="heroicons:arrow-path-rounded-square" class="w-4 h-4 mr-2" :class="resetting ? 'animate-spin' : ''" />
+             Reset
+          </button>
           <button @click="fetchPendingTasks" class="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all">
              <Icon name="heroicons:arrow-path" class="w-5 h-5" :class="loading ? 'animate-spin' : ''" />
           </button>
@@ -98,11 +102,17 @@
           </ClientOnly>
           
           <!-- Legend Overlay -->
-          <div v-if="optimizedData" class="absolute bottom-6 right-6 bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-2xl border border-white/50 z-20 space-y-2 max-w-xs">
-             <p class="text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">Active Routes</p>
-             <div v-for="assignment in (optimizedData as any).assignments" :key="assignment.officerId" class="flex items-center gap-3">
-                <div :style="{ backgroundColor: getOfficerColor(assignment.officerId) }" class="w-3 h-1 rounded-full"></div>
-                <span class="text-xs font-bold text-gray-700 truncate">{{ assignment.officerName }}</span>
+          <div v-if="optimizedData" class="absolute bottom-6 right-6 bg-white/95 backdrop-blur-md p-5 rounded-3xl shadow-2xl border border-white/50 z-20 space-y-3 max-w-xs ring-1 ring-black/5">
+             <div class="flex items-center justify-between mb-1">
+                <p class="text-[10px] font-black uppercase text-gray-400 tracking-widest">Resource Allocation</p>
+                <div class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
+             </div>
+             <div v-for="assignment in (optimizedData as any).assignments" :key="assignment.officerId" class="flex items-center gap-3 group cursor-pointer hover:bg-gray-50 p-1 -m-1 rounded-xl transition-all">
+                <div :style="{ backgroundColor: getOfficerColor(assignment.officerId) }" class="w-3 h-3 rounded-full ring-2 ring-white shadow-sm group-hover:scale-125 transition-transform"></div>
+                <div class="flex-1 min-w-0">
+                   <p class="text-xs font-bold text-gray-700 truncate leading-none">{{ assignment.officerName }}</p>
+                   <p class="text-[9px] text-gray-400 font-medium mt-1">{{ assignment.assignedIssues.length }} tasks • {{ assignment.totalDistance.toFixed(1) }}km</p>
+                </div>
              </div>
           </div>
 
@@ -134,6 +144,7 @@ definePageMeta({
 
 const config = useRuntimeConfig()
 const optimizing = ref(false)
+const resetting = ref(false)
 const loading = ref(false)
 const optimizedData = ref(null)
 const map = ref<any>(null)
@@ -313,6 +324,29 @@ const optimizeRoutes = async () => {
   }
 }
 
+const resetAllocations = async () => {
+   if (!confirm('Are you sure you want to reset all task allocations? This will clear current assignments.')) return
+   
+   resetting.value = true
+   try {
+      const authStore = useAuthStore()
+      await $fetch(`${config.public.apiBase}/tasks/reset-allocations`, {
+         method: 'POST',
+         headers: { Authorization: `Bearer ${authStore.token}` }
+      })
+      
+      optimizedData.value = null
+      polylines.value.forEach(p => p.remove())
+      polylines.value = []
+      
+      await fetchPendingTasks()
+   } catch (e) {
+      console.error('Reset failed', e)
+   } finally {
+      resetting.value = false
+   }
+}
+
 const totalAssignedTasks = computed(() => {
    if (!optimizedData.value) return 0
    return (optimizedData.value as any).assignments.reduce((sum: number, a: any) => sum + a.assignedIssues.length, 0)
@@ -326,7 +360,11 @@ const officerColorsList = [
    '#ec4899', // Pink
    '#06b6d4', // Cyan
    '#f97316', // Orange
-   '#ef4444'  // Red
+   '#ef4444', // Red
+   '#14b8a6', // Teal
+   '#f43f5e', // Rose
+   '#84cc16', // Lime
+   '#a855f7'  // Purple
 ]
 
 const getOfficerColor = (id: string) => {

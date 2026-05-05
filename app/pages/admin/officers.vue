@@ -28,6 +28,12 @@
              </div>
              <div class="flex items-center gap-1 bg-gray-50 p-1 rounded-lg border border-gray-100">
                 <button 
+                  @click="openEditSkills(officer)" 
+                  title="Edit Skills"
+                  class="p-1.5 rounded-md text-gray-400 hover:text-primary-600 hover:bg-white transition-all shadow-sm">
+                   <Icon name="heroicons:pencil-square" class="w-4 h-4" />
+                </button>
+                <button 
                   @click="updateAvailability(officer, 'AVAILABLE')" 
                   title="Mark Available"
                   :class="officer.availabilityStatus === 'AVAILABLE' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-400 hover:text-green-500'" 
@@ -42,6 +48,28 @@
                    <Icon name="heroicons:no-symbol" class="w-4 h-4" />
                 </button>
              </div>
+          </div>
+       </div>
+    </div>
+
+    <!-- Edit Skills Modal -->
+    <div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+       <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+          <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+             <h3 class="text-lg font-bold text-gray-900">Update Skills: {{ selectedOfficer?.name }}</h3>
+             <button @click="showEditModal = false" class="text-gray-400 hover:text-gray-500">
+                <Icon name="heroicons:x-mark" class="w-6 h-6" />
+             </button>
+          </div>
+          <div class="p-6">
+             <label class="block text-sm font-medium text-gray-700 mb-1">Skills (comma separated)</label>
+             <input v-model="editSkillsForm" type="text" placeholder="Road Repair, Drainage" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500">
+          </div>
+          <div class="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+             <button @click="showEditModal = false" class="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium">Cancel</button>
+             <button @click="updateSkills" :disabled="loading" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium shadow-lg shadow-primary-500/30">
+                {{ loading ? 'Saving...' : 'Save Changes' }}
+             </button>
           </div>
        </div>
     </div>
@@ -95,6 +123,9 @@ definePageMeta({
 const config = useRuntimeConfig()
 // const officers = ref([])
 const showModal = ref(false)
+const showEditModal = ref(false)
+const selectedOfficer = ref<any>(null)
+const editSkillsForm = ref('')
 const loading = ref(false)
 const form = reactive({
   firstname: '',
@@ -153,6 +184,35 @@ const createOfficer = async () => {
       closeModal()
    } catch (e) {
       alert('Failed to create officer')
+   } finally {
+      loading.value = false
+   }
+}
+
+const openEditSkills = (officer: any) => {
+   selectedOfficer.value = officer
+   editSkillsForm.value = officer.skills.join(', ')
+   showEditModal.value = true
+}
+
+const updateSkills = async () => {
+   if (!selectedOfficer.value) return
+   loading.value = true
+   try {
+      await $fetch(`${config.public.apiBase}/officers/${selectedOfficer.value.id}`, {
+         method: 'PUT',
+         headers: {
+            Authorization: `Bearer ${authStore.token}`
+         },
+         body: {
+            ...selectedOfficer.value,
+            skills: editSkillsForm.value.split(',').map(s => s.trim())
+         }
+      })
+      await refresh()
+      showEditModal.value = false
+   } catch (e) {
+      alert('Failed to update skills')
    } finally {
       loading.value = false
    }
